@@ -7,8 +7,8 @@ If you feel it helpful for your research, please cite the paper mentioned above.
 ## Getting Started
 
 ### Environment
-We use ```julia1.8``` and the packages needed and their versions are listed in ```packages.txt```.
-Most of codes are not sensitive to package versions except those involving ```GenericArpack```.
+We use ```julia1.8``` and we provide the ```Project.toml``` and ```Manifest.toml``` files for our environment.
+You should be able to activate it by typing ```activate .``` in Pkg REPL(i.e. ```] activate .```).
 
 ## Datasets
 The synthetic and real-world datasets we use are included in ```./data/input``` except soc-LiveJournal because of size. 
