@@ -21,6 +21,9 @@ function parse_lrsdp_cmd()
             help = "Which graph to run experiments on."
             arg_type = String
             default = "deezer"
+        "--resfolder"
+            help = "Location where we save resutls"
+            arg_type = String
         "--kvals"
             help = "ranks of low-rank SDP matrices."
             arg_type = Int
@@ -46,6 +49,9 @@ function parse_ncp_cmd()
             help = "Which graph to run experiments on."
             arg_type = String
             default = "deezer"
+        "--resfolder"
+            help = "Location where we save resutls"
+            arg_type = String
         "--epsvals"
             help = "Which set of eps we run seeded PageRank(ACL)."
             arg_type = Float64 

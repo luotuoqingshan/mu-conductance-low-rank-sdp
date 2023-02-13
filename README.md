@@ -4,9 +4,7 @@ This repo contains codes for the following paper:
 
 If you feel it helpful for your research, please cite the paper mentioned above.
 
-## Getting Started
-
-### Environment
+## Environment
 We use ```julia1.8``` and we provide the ```Project.toml``` and ```Manifest.toml``` files for our environment.
 You should be able to activate it by typing ```activate .``` in Pkg REPL(i.e. ```] activate .```).
 

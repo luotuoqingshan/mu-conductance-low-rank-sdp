@@ -55,7 +55,7 @@ function lrsdpobjplot(
     label::String="1",
     xlabel::String="Volume",
     ylabel::String="Conductance",
-    datafolder::String=homedir()*"/mu-cond/data/output/",
+    datafolder::String=pwd()*"/../data/output/",
     minvol::Int=10,
 )
     xs = Float64[]

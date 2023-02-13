@@ -10,7 +10,7 @@ filename = args["filename"]
 
 A = load_graph(filename)
 
-saved_config = TOML.parsefile(homedir()*"/mu-cond/src/configs/lrsdp_config.toml") 
+saved_config = TOML.parsefile(pwd()*"/configs/lrsdp_config.toml") 
 
 Ktol, Ptol, maxfun, init_type, kvals, muvals, = 
     args["Ktol"], args["Ptol"], args["maxfun"], args["init_type"], args["kvals"], args["muvals"] 
@@ -27,7 +27,11 @@ end
 
 @show Ktol, Ptol, maxfun, init_type, kvals, muvals
 
-resfolder = homedir()*"/mu-cond/data/output/"
+if args["resfolder"] === nothing
+    resfolder = pwd()*"/../data/output/"
+else
+    resfolder = args["resfolder"]
+end
 
 mus = Float64[]
 ks = Int[]
