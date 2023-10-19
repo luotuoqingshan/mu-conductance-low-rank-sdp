@@ -1,6 +1,10 @@
 # mu-conductance low-rank SDP
 
-This repo contains codes for the following paper:
+This repo contains codes for the following ICML2023 paper:
+
+```
+Theoretical Bounds on the Network Community Profile from Low-rank Semi-definite Programming
+```
 
 If you feel it helpful for your research, please cite the paper mentioned above.
 
