@@ -9,8 +9,8 @@ Theoretical Bounds on the Network Community Profile from Low-rank Semi-definite 
 If you feel it helpful for your research, please cite the paper mentioned above.
 
 ## Environment
-We use ```julia1.8``` and we provide the ```Project.toml``` and ```Manifest.toml``` files for our environment.
-You should be able to activate it by typing ```activate .``` in Pkg REPL(i.e. ```] activate .```).
+We use ```julia1.8``` in particular (other versions should also work) and we provide the ```Project.toml``` file for our environment.
+You should be able to activate it by typing ```activate .``` in Pkg REPL(i.e. ```] activate .```), then instantiate it via ```instantiate```.
 
 ## Datasets
 The synthetic and real-world datasets we use are included in ```./data/input``` except soc-LiveJournal because of size. 
