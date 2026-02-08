@@ -213,6 +213,10 @@ function KKT_sdp(
     v2 = Y' * d
     primal_feasi[2] = v2' * v2
     primal_feasi[3:n+2] = Y .^ 2 * ones(k) + s - ubsqr
+    @show primal_feasi[1]
+    @show primal_feasi[2]
+    @show norm(primal_feasi[3:n+2], Inf)
+    @show norm(primal_feasi[3:n+2], 2)
 
     if verbose
         println("Primal feasibility: ")
@@ -373,7 +377,12 @@ function _ALM(
         primal_feasi = compute_primal_feasi(YS, d, ubsqr, n, k)
         primal_norm = norm(primal_feasi, Inf)
 
-        @show Ktol, Ptol, stationary, primal_norm, sigma, eta, omega, mu, k
+        KKT_dt = @elapsed begin
+            primal_feasi, dual_feasi, comp_slack = KKT_sdp(YS, L, d, ubsqr, lam, n, k)
+        end
+        @show ub^2
+        @show dual_feasi, comp_slack
+        @show Ktol, Ptol, stationary, primal_norm, sigma, eta, omega, mu, k, primal_feasi[1], primal_feasi[2], norm(primal_feasi[3:n+2], Inf), norm(primal_feasi[3:n+2], 2)
 
         if norm(primal_feasi, Inf) <= eta
             if norm(primal_feasi, Inf) <= Ptol && stationary <= Ktol
