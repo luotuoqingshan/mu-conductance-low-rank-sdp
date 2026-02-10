@@ -18,6 +18,7 @@ using MatrixNetworks
 using LBFGSB
 using GenericArpack
 using Distributed
+using PrettyTables
 
 """
 Augmented Lagrangian for the low-rank SDP
@@ -306,6 +307,16 @@ function initialize(A::SparseMatrixCSC, d::Vector, mu::Float64, k::Int64, type::
 end
 
 
+function print_info(mu, k, T, pobj, dobj, S_min_eigval, comp_slack, stationary, primal_norm, sigma,
+                    eta, omega)
+    header = ["μ", "k", "T", "pobj", "dobj", "S_min_eigval", "⟨YY', S⟩", "‖proj grad‖_∞", "‖pinfeas‖₂", "σₜ", "ηₜ", "ωₜ"]
+    data = [mu k T pobj dobj S_min_eigval comp_slack stationary primal_norm sigma eta omega]
+    pretty_table(data; column_labels=header, 
+                 formatters = [fmt__printf("%.3E", [1]),
+                               fmt__printf("%d", 2:3),
+                               fmt__printf("%.3E", 4:12)])
+end
+
 function _ALM(
     A::SparseMatrixCSC,
     mu::Float64,
@@ -380,9 +391,8 @@ function _ALM(
         KKT_dt = @elapsed begin
             primal_feasi, dual_feasi, comp_slack = KKT_sdp(YS, L, d, ubsqr, lam, n, k)
         end
-        @show ub^2
-        @show dual_feasi, comp_slack
-        @show Ktol, Ptol, stationary, primal_norm, sigma, eta, omega, mu, k, primal_feasi[1], primal_feasi[2], norm(primal_feasi[3:n+2], Inf), norm(primal_feasi[3:n+2], 2)
+        print_info(mu, k, iter, pobj, dual_value, dual_feasi[1], comp_slack, stationary,
+                   norm(primal_feasi, 2), sigma, eta, omega)
 
         if norm(primal_feasi, Inf) <= eta
             if norm(primal_feasi, Inf) <= Ptol && stationary <= Ktol
@@ -400,7 +410,6 @@ function _ALM(
         end
         eta = max(eta, Ptol)
         omega = max(omega, Ktol)
-        @show mu, k, obj(YS, L, n, k)
         if cverg
             break
         end
