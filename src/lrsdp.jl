@@ -214,10 +214,6 @@ function KKT_sdp(
     v2 = Y' * d
     primal_feasi[2] = v2' * v2
     primal_feasi[3:n+2] = Y .^ 2 * ones(k) + s - ubsqr
-    @show primal_feasi[1]
-    @show primal_feasi[2]
-    @show norm(primal_feasi[3:n+2], Inf)
-    @show norm(primal_feasi[3:n+2], 2)
 
     if verbose
         println("Primal feasibility: ")
@@ -317,6 +313,12 @@ function print_info(mu, k, T, pobj, dobj, S_min_eigval, comp_slack, stationary, 
                                fmt__printf("%.3E", 4:12)])
 end
 
+
+function dual_value(n, lam, ub, lb, trace_bound, S_min_eigval)
+    return (lam[1] + ub^2 * sum(lam[3:n+2]) - (ub^2 - lb^2) * sum(max.(0, lam[3:n+2])) + trace_bound * min(S_min_eigval, 0))
+end
+
+
 function _ALM(
     A::SparseMatrixCSC,
     mu::Float64,
@@ -340,6 +342,9 @@ function _ALM(
 
     lb = sqrt(mu / (1 - mu) / Vol)
     ub = sqrt((1 - mu) / mu / Vol)
+
+    trace_bound = sum(min.(ub^2,((1 - 2*mu) / (1 - mu) ./ d) .+ lb^2))
+    trace_bound = min(trace_bound, 1)
 
     lam = zeros(n + 2)
 
@@ -391,9 +396,10 @@ function _ALM(
         KKT_dt = @elapsed begin
             primal_feasi, dual_feasi, comp_slack = KKT_sdp(YS, L, d, ubsqr, lam, n, k)
         end
-        print_info(mu, k, iter, pobj, dual_value, dual_feasi[1], comp_slack, stationary,
+        pobj = obj(YS, L, n, k)
+        dobj = dual_value(n, lam, ub, lb, trace_bound, dual_feasi[1])
+        print_info(mu, k, iter, pobj, dobj, dual_feasi[1], comp_slack, stationary,
                    norm(primal_feasi, 2), sigma, eta, omega)
-
         if norm(primal_feasi, Inf) <= eta
             if norm(primal_feasi, Inf) <= Ptol && stationary <= Ktol
                 cverg = true
