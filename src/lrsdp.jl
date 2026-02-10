@@ -314,6 +314,56 @@ function print_info(mu, k, T, pobj, dobj, S_min_eigval, comp_slack, stationary, 
 end
 
 
+"""
+Compute the dual objective value for the μ-conductance low-rank SDP problem.
+
+The dual problem formulation is:
+
+    λ_μ^sdd = maximize_{λ, β, γ, g, l, Z}  λ + (1-μ)/(μ·Vol(G)) · γ^T·1 - (1-2μ)/(μ·(1-μ)·Vol(G)) · l^T·1
+
+    subject to:
+        L - λ·D - β·d·d^T - Diag(γ) - Z = 0
+        l - g - γ = 0
+        l ≥ 0,  g ≥ 0,  Z ⪰ 0
+
+where:
+    - L is the Laplacian matrix
+    - D = Diag(d) is the degree matrix
+    - d is the degree vector
+    - Vol(G) = sum(d) is the volume of graph G
+    - μ is the conductance parameter
+    - λ is a scalar dual variable
+    - β is a scalar dual variable (free variable, not explicitly stored)
+    - γ is a vector of dual variables (lam[3:n+2])
+    - g, l are non-negative vectors satisfying l - g = γ
+    - Z ⪰ 0 is a positive semi-definite matrix
+
+This function evaluates the dual objective at the current dual variables.
+
+Arguments:
+    n::Int: Number of vertices in the graph
+    lam::Vector{Float64}: Dual variables vector of length n+2
+        - lam[1] = λ (scalar dual variable)
+        - lam[2] = β (scalar dual variable, though not used in this computation)
+        - lam[3:n+2] = γ (vector of dual variables)
+    ub::Float64: Upper bound, where ub² = (1-μ)/(μ·Vol(G))
+    lb::Float64: Lower bound, where lb² = μ/((1-μ)·Vol(G))
+    trace_bound::Float64: Bound on trace constraint, used to penalize PSD constraint violations
+    S_min_eigval::Float64: Minimum eigenvalue of the matrix S = L - λ·D - β·d·d^T - Diag(γ)
+                          (computed in KKT_sdp via symeigs)
+
+Returns:
+    Float64: The dual objective value
+
+The dual objective consists of four terms:
+    1. lam[1]: The λ term
+    2. ub² · sum(lam[3:n+2]): The (1-μ)/(μ·Vol(G)) · γ^T·1 term
+    3. -(ub² - lb²) · sum(max.(0, lam[3:n+2])): The -(1-2μ)/(μ·(1-μ)·Vol(G)) · l^T·1 term
+       where l = max(0, γ) represents the positive part of γ (since l - g = γ and l, g ≥ 0)
+    4. trace_bound · min(S_min_eigval, 0): Penalty term for PSD constraint violation
+       When Z ⪰ 0 is satisfied, S_min_eigval ≥ 0, so this term is 0.
+       When violated, this penalizes the dual objective proportionally to the violation.
+"""
 function dual_value(n, lam, ub, lb, trace_bound, S_min_eigval)
     return (lam[1] + ub^2 * sum(lam[3:n+2]) - (ub^2 - lb^2) * sum(max.(0, lam[3:n+2])) + trace_bound * min(S_min_eigval, 0))
 end
