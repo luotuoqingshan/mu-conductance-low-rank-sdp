@@ -18,6 +18,7 @@ using MatrixNetworks
 using LBFGSB
 using GenericArpack
 using Distributed
+using PrettyTables
 
 """
 Augmented Lagrangian for the low-rank SDP
@@ -47,8 +48,8 @@ function f(
     n::Int64,
     k::Int64,
 )
-    Y = reshape(@view(YS[1:n*k]), n, k)
-    s = @view(YS[n*k+1:n*(k+1)])
+    Y = reshape(@view(YS[1:(n*k)]), n, k)
+    s = @view(YS[(n*k+1):(n*(k+1))])
     v0 = sum(Y .* (L * Y))
     v1 = sum(Y .* (Y .* d))
     v2 = Y' * d
@@ -56,7 +57,7 @@ function f(
     v3 = Y .^ 2 * ones(k) + s - ubsqr
     return (
         v0 - lam[1] * (v1 - 1) + sigma / 2 * (v1 - 1)^2 - lam[2] * v2 +
-        sigma / 2 * v2 * v2 - lam[3:n+2]' * v3 + sigma / 2 * v3' * v3
+        sigma / 2 * v2 * v2 - lam[3:(n+2)]' * v3 + sigma / 2 * v3' * v3
     )
 end
 
@@ -83,19 +84,20 @@ function g!(
     n::Int64,
     k::Int64,
 )
-    Y = reshape(@view(YS[1:n*k]), n, k)
-    s = @view(YS[n*k+1:n*(k+1)])
+    Y = reshape(@view(YS[1:(n*k)]), n, k)
+    s = @view(YS[(n*k+1):(n*(k+1))])
     v1 = sum(Y .* (Y .* d))
     v2 = Y' * d
     v21 = v2' * v2
     v22 = d * v2'
     v3 = Y .^ 2 * ones(k) + s - ubsqr
-    mG = reshape(@view(G[1:n*(k+1)]), n, k + 1)
+    mG = reshape(@view(G[1:(n*(k+1))]), n, k + 1)
     mG[:, 1:k] = (
         2 * L * Y - 2 * (lam[1] - sigma * (v1 - 1)) * (Y .* d) -
-        2 * v22 * (lam[2] - sigma * v21) - 2 * ((lam[3:n+2] - sigma * v3) .* Y)
+        2 * v22 * (lam[2] - sigma * v21) -
+        2 * ((lam[3:(n+2)] - sigma * v3) .* Y)
     )
-    mG[:, k+1] = (-lam[3:n+2] + sigma * v3)
+    mG[:, k+1] = (-lam[3:(n+2)] + sigma * v3)
 end
 
 
@@ -117,7 +119,10 @@ function test_g(; n::Int64 = 10, k::Int64 = 10, ncases = 100)
         numeric_grad = FiniteDiff.finite_difference_jacobian(
             xs -> f(xs, L, d, lam, ubsqr, sigma, n, k),
             YS,
-        )[1, :]
+        )[
+            1,
+            :,
+        ]
         analytic_grad = zeros(n * (k + 1))
         g!(analytic_grad, YS, L, d, lam, ubsqr, sigma, n, k)
         rel_error = norm(analytic_grad - numeric_grad) / norm(analytic_grad)
@@ -131,7 +136,7 @@ end
 Objective Value of the low-rank SDP.
 """
 function obj(YS::Vector{Float64}, L::SparseMatrixCSC{Int64}, n::Int64, k::Int64)
-    Y = reshape(@view(YS[1:n*k]), n, k)
+    Y = reshape(@view(YS[1:(n*k)]), n, k)
     v0 = sum(Y .* (L * Y))
     return v0
 end
@@ -164,13 +169,13 @@ function compute_primal_feasi(
     n::Int64,
     k::Int64,
 )
-    Y = reshape(@view(YS[1:n*k]), n, k)
-    s = @view(YS[n*k+1:n*(k+1)])
+    Y = reshape(@view(YS[1:(n*k)]), n, k)
+    s = @view(YS[(n*k+1):(n*(k+1))])
     cons = zeros(n + 2)
     cons[1] = sum(Y .* (Y .* d)) - 1
     v2 = Y' * d
     cons[2] = v2' * v2
-    cons[3:n+2] = Y .^ 2 * ones(k) + s - ubsqr
+    cons[3:(n+2)] = Y .^ 2 * ones(k) + s - ubsqr
     return cons
 end
 
@@ -201,8 +206,8 @@ function KKT_sdp(
     nev = 6,
     verbose = false,
 )
-    Y = reshape(@view(YS[1:n*k]), n, k)
-    s = @view(YS[n*k+1:n*(k+1)])
+    Y = reshape(@view(YS[1:(n*k)]), n, k)
+    s = @view(YS[(n*k+1):(n*(k+1))])
 
     primal_feasi = zeros(n + 2)
     dual_feasi = zeros(nev)
@@ -212,7 +217,7 @@ function KKT_sdp(
     primal_feasi[1] = sum(Y .* (Y .* d)) - 1
     v2 = Y' * d
     primal_feasi[2] = v2' * v2
-    primal_feasi[3:n+2] = Y .^ 2 * ones(k) + s - ubsqr
+    primal_feasi[3:(n+2)] = Y .^ 2 * ones(k) + s - ubsqr
 
     if verbose
         println("Primal feasibility: ")
@@ -222,25 +227,27 @@ function KKT_sdp(
     # notice beta is free, no matter how you take it, the complement slackness Tr(ZX) = 0 is
     # always satisfied because Xd = 0. But this is numerical computation, we should make sure
     # |d' * X * d * beta| isn't too large, otherwise Tr(ZX) = 0 will be affected numerically.
-    op = ArpackSimpleFunctionOp(
-	    (y,x) -> begin 
-		    mul!(y, L, x) # this will compute L*x
-		    y .-= lam[1] * (d.*x )
-		    y .-= (beta*(d'*x)) * (d) 
-		    y .-= lam[3:n+2] .* x 
-	    end, n)
-    eigvals, eigvecs = symeigs(op, 1; which=:SA, ncv=min(100, n), maxiter=1000000)
+    op = ArpackSimpleFunctionOp((y, x) -> begin
+        mul!(y, L, x) # this will compute L*x
+        y .-= lam[1] * (d .* x)
+        y .-= (beta*(d'*x)) * (d)
+        y .-= lam[3:(n+2)] .* x
+    end, n)
+    eigvals, eigvecs =
+        symeigs(op, 1; which = :SA, ncv = min(100, n), maxiter = 1000000)
     dual_feasi = real.(eigvals)
 
 
     if verbose
         println("Dual feasibility: ")
-        println("Smallest eigenvalues of L - lambda*Diag(d) - beta*d*d' - Diag(gamma)")
+        println(
+            "Smallest eigenvalues of L - lambda*Diag(d) - beta*d*d' - Diag(gamma)",
+        )
         @show dual_feasi
     end
 
-    V = L - lam[1] * Diagonal(d) - Diagonal(lam[3:n+2]) ## V is sparse
-    complement_slackness[1] = sum(Y .* (V * Y)) - beta * sum((Y' * d).^2)
+    V = L - lam[1] * Diagonal(d) - Diagonal(lam[3:(n+2)]) ## V is sparse
+    complement_slackness[1] = sum(Y .* (V * Y)) - beta * sum((Y' * d) .^ 2)
 
     if verbose
         println("Complementary Slackness:")
@@ -251,7 +258,13 @@ function KKT_sdp(
 end
 
 
-function initialize(A::SparseMatrixCSC, d::Vector, mu::Float64, k::Int64, type::Int64)
+function initialize(
+    A::SparseMatrixCSC,
+    d::Vector,
+    mu::Float64,
+    k::Int64,
+    type::Int64,
+)
     L = Diagonal(d) - A
     n = L.n
     Y = zeros(n, k + 1)
@@ -287,18 +300,119 @@ function initialize(A::SparseMatrixCSC, d::Vector, mu::Float64, k::Int64, type::
     elseif type == 2
         L = degree_normalized_Laplacian(A)
 
-        eigvals, eigvecs = symeigs(L,  k + 1; which = :SA, maxiter = 10000)
-        Y[:, 1:k] = eigvecs[:, 2:k+1]
+        eigvals, eigvecs = symeigs(L, k + 1; which = :SA, maxiter = 10000)
+        Y[:, 1:k] = eigvecs[:, 2:(k+1)]
     end
     Y = Y / sqrt(k)
     Y[:, k+1] = ubsqr - Y[:, 1:k] .^ 2 * ones(k)
     Y[:, k+1] = max.(Y[:, k+1], 0)
     Y[:, k+1] = min.(Y[:, k+1], ub^2 - lb^2)
-    if type == 3 
+    if type == 3
         # use random Y and s
         Y = randn(n, k + 1)
     end
     return reshape(Y, n * (k + 1))
+end
+
+
+function print_info(
+    mu,
+    k,
+    T,
+    pobj,
+    dobj,
+    S_min_eigval,
+    comp_slack,
+    stationary,
+    primal_norm,
+    sigma,
+    eta,
+    omega,
+)
+    header = [
+        "μ",
+        "k",
+        "T",
+        "pobj",
+        "dobj",
+        "S_min_eigval",
+        "⟨YY', S⟩",
+        "‖proj grad‖_∞",
+        "‖pinfeas‖₂",
+        "σₜ",
+        "ηₜ",
+        "ωₜ",
+    ]
+    data =
+        [mu k T pobj dobj S_min_eigval comp_slack stationary primal_norm sigma eta omega]
+    pretty_table(
+        data;
+        column_labels = header,
+        formatters = [
+            fmt__printf("%.3E", [1]),
+            fmt__printf("%d", 2:3),
+            fmt__printf("%.3E", 4:12),
+        ],
+    )
+end
+
+
+"""
+Compute the dual objective value for the μ-conductance low-rank SDP problem.
+
+The dual problem formulation is:
+
+    λ_μ^sdd = maximize_{λ, β, γ, g, l, Z}  λ + (1-μ)/(μ·Vol(G)) · γ^T·1 - (1-2μ)/(μ·(1-μ)·Vol(G)) · l^T·1
+
+    subject to:
+        L - λ·D - β·d·d^T - Diag(γ) - Z = 0
+        l - g - γ = 0
+        l ≥ 0,  g ≥ 0,  Z ⪰ 0
+
+where:
+    - L is the Laplacian matrix
+    - D = Diag(d) is the degree matrix
+    - d is the degree vector
+    - Vol(G) = sum(d) is the volume of graph G
+    - μ is the conductance parameter
+    - λ is a scalar dual variable
+    - β is a scalar dual variable (free variable, not explicitly stored)
+    - γ is a vector of dual variables (lam[3:n+2])
+    - g, l are non-negative vectors satisfying l - g = γ
+    - Z ⪰ 0 is a positive semi-definite matrix
+
+This function evaluates the dual objective at the current dual variables.
+
+Arguments:
+    n::Int: Number of vertices in the graph
+    lam::Vector{Float64}: Dual variables vector of length n+2
+        - lam[1] = λ (scalar dual variable)
+        - lam[2] = β (scalar dual variable, though not used in this computation)
+        - lam[3:n+2] = γ (vector of dual variables)
+    ub::Float64: Upper bound, where ub² = (1-μ)/(μ·Vol(G))
+    lb::Float64: Lower bound, where lb² = μ/((1-μ)·Vol(G))
+    trace_bound::Float64: Bound on trace constraint, used to penalize PSD constraint violations
+    S_min_eigval::Float64: Minimum eigenvalue of the matrix S = L - λ·D - β·d·d^T - Diag(γ)
+                          (computed in KKT_sdp via symeigs)
+
+Returns:
+    Float64: The dual objective value
+
+The dual objective consists of four terms:
+    1. lam[1]: The λ term
+    2. ub² · sum(lam[3:n+2]): The (1-μ)/(μ·Vol(G)) · γ^T·1 term
+    3. -(ub² - lb²) · sum(max.(0, lam[3:n+2])): The -(1-2μ)/(μ·(1-μ)·Vol(G)) · l^T·1 term
+       where l = max(0, γ) represents the positive part of γ (since l - g = γ and l, g ≥ 0)
+    4. trace_bound · min(S_min_eigval, 0): Penalty term for PSD constraint violation
+       When Z ⪰ 0 is satisfied, S_min_eigval ≥ 0, so this term is 0.
+       When violated, this penalizes the dual objective proportionally to the violation.
+"""
+function dual_value(n, lam, ub, lb, trace_bound, S_min_eigval)
+    return (
+        lam[1] + ub^2 * sum(lam[3:(n+2)]) -
+        (ub^2 - lb^2) * sum(max.(0, lam[3:(n+2)])) +
+        trace_bound * min(S_min_eigval, 0)
+    )
 end
 
 
@@ -326,26 +440,29 @@ function _ALM(
     lb = sqrt(mu / (1 - mu) / Vol)
     ub = sqrt((1 - mu) / mu / Vol)
 
+    trace_bound = sum(min.(ub^2, ((1 - 2*mu) / (1 - mu) ./ d) .+ lb^2))
+    trace_bound = min(trace_bound, 1)
+
     lam = zeros(n + 2)
 
     bounds = zeros(3, n * (k + 1))
-    bounds[1, 1:n*k] .= 0
-    bounds[1, n*k+1:n*(k+1)] .= 2
-    bounds[2, 1:n*k] .= -Inf
-    bounds[2, n*k+1:n*(k+1)] .= 0
-    bounds[3, 1:n*k] .= Inf
-    bounds[3, n*k+1:n*(k+1)] .= ub .^ 2 - lb .^ 2
+    bounds[1, 1:(n*k)] .= 0
+    bounds[1, (n*k+1):(n*(k+1))] .= 2
+    bounds[2, 1:(n*k)] .= -Inf
+    bounds[2, (n*k+1):(n*(k+1))] .= 0
+    bounds[3, 1:(n*k)] .= Inf
+    bounds[3, (n*k+1):(n*(k+1))] .= ub .^ 2 - lb .^ 2
 
     ubsqr = ub .^ 2 * ones(n)
 
-    if init_type <= 3 
+    if init_type <= 3
         YS = initialize(A, d, mu, k, init_type)
     else
         @assert x0 !== nothing "Please specify one initial Y."
         YS = zeros(n, k + 1)
         YS[:, 1:k] = x0
-        YS[:, k+1] = ubsqr - YS[:, 1:k] .^ 2 * ones(k)  
-        YS = reshape(YS, n * (k + 1))  
+        YS[:, k+1] = ubsqr - YS[:, 1:k] .^ 2 * ones(k)
+        YS = reshape(YS, n * (k + 1))
     end
 
     optimizer = L_BFGS_B(n * (k + 1), 3)
@@ -373,8 +490,26 @@ function _ALM(
         primal_feasi = compute_primal_feasi(YS, d, ubsqr, n, k)
         primal_norm = norm(primal_feasi, Inf)
 
-        @show Ktol, Ptol, stationary, primal_norm, sigma, eta, omega, mu, k
-
+        KKT_dt = @elapsed begin
+            primal_feasi, dual_feasi, comp_slack =
+                KKT_sdp(YS, L, d, ubsqr, lam, n, k)
+        end
+        pobj = obj(YS, L, n, k)
+        dobj = dual_value(n, lam, ub, lb, trace_bound, dual_feasi[1])
+        print_info(
+            mu,
+            k,
+            iter,
+            pobj,
+            dobj,
+            dual_feasi[1],
+            comp_slack,
+            stationary,
+            norm(primal_feasi, 2),
+            sigma,
+            eta,
+            omega,
+        )
         if norm(primal_feasi, Inf) <= eta
             if norm(primal_feasi, Inf) <= Ptol && stationary <= Ktol
                 cverg = true
@@ -391,7 +526,6 @@ function _ALM(
         end
         eta = max(eta, Ptol)
         omega = max(omega, Ktol)
-        @show mu, k, obj(YS, L, n, k)
         if cverg
             break
         end
@@ -412,7 +546,7 @@ function ALM(
     resultfolder::String,
 )
     n = size(A)[1]
-    d = sum(A, dims=1)[1, :]
+    d = sum(A, dims = 1)[1, :]
     L = Diagonal(d) - A
     ALM_dt = @elapsed begin
         vec_YS, lam, sigma, ubsqr, cverg, n, k, niter = _ALM(
@@ -426,9 +560,10 @@ function ALM(
         )
     end
     Gvol = sum(d)
-    objval = obj(vec_YS, L, n, k) 
+    objval = obj(vec_YS, L, n, k)
     KKT_dt = @elapsed begin
-        primal_feasi, dual_feasi, comp_slack = KKT_sdp(vec_YS, L, d, ubsqr, lam, n, k)
+        primal_feasi, dual_feasi, comp_slack =
+            KKT_sdp(vec_YS, L, d, ubsqr, lam, n, k)
     end
     theta = min(0, dual_feasi[1])
     YS = reshape(@views(vec_YS), n, k + 1)
@@ -450,14 +585,14 @@ function ALM(
             "k" => k,
             "niter" => niter,
             "primal_feasi" => primal_feasi,
-            "dual_feasi" => dual_feasi, 
+            "dual_feasi" => dual_feasi,
             "comp_slack" => comp_slack,
             "KKT_dt" => KKT_dt,
             "objval" => objval,
             "Gvol" => Gvol,
         );
     )
-    delta = theta * sum(YS[:,1:k].^2)
+    delta = theta * sum(YS[:, 1:k] .^ 2)
     dt = ALM_dt + KKT_dt
     return dt, objval, delta
 end
@@ -489,7 +624,8 @@ function do_jobs(
         if mu == -1
             break
         end
-        exec_time, objval, delta = ALM(mu, A, k, init_type, Ktol, Ptol, maxfun, filename, resultfolder)
+        exec_time, objval, delta =
+            ALM(mu, A, k, init_type, Ktol, Ptol, maxfun, filename, resultfolder)
         put!(results, (mu, k, exec_time, objval, delta, myid()))
     end
 end
