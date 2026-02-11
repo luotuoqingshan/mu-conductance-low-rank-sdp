@@ -12,10 +12,10 @@ function del_selfloops(A::SparseMatrixCSC)
     nzval = A.nzval
 
     n = size(A, 1)
-    I = Array{Int}(undef, 0) 
+    I = Array{Int}(undef, 0)
     J = Array{Int}(undef, 0)
     for u = 1:n
-        for nzi in colptr[u]:(colptr[u+1]-1)
+        for nzi = colptr[u]:(colptr[u+1]-1)
             v = rowval[nzi]
             if u != v
                 push!(I, u)
@@ -53,39 +53,41 @@ function load_graph_smat(path2file::String)
     J = E[2:end, 2] .+ 1
     V = E[2:end, 3]
     A = sparse(I, J, V)
-    A, _ = largest_component(A) 
+    A, _ = largest_component(A)
     return A
 end
 
 
 function load_graph_edge(path2file::String)
     E = readdlm(path2file, Int64)
-    I = E[:, 1]  
+    I = E[:, 1]
     J = E[:, 2]
-    A = sparse(I, J, ones(Int64,length(I))) 
+    A = sparse(I, J, ones(Int64, length(I)))
     A_lcc, _ = largest_component(A)
-    return A_lcc 
+    return A_lcc
 end
 
 
 function load_graph_edge_xy(path2file::String)
     E = readdlm(path2file*".edges", Int64)
-    I = E[:, 1]  
+    I = E[:, 1]
     J = E[:, 2]
-    A = sparse(I, J, ones(Int64,length(I))) 
+    A = sparse(I, J, ones(Int64, length(I)))
     xy = readdlm(path2file*".xy", Float64)
     A_lcc, filt = largest_component(A)
     xy = xy[filt, :]
-    return A_lcc, xy 
+    return A_lcc, xy
 end
 
 
-function load_graph(dataset="ca-HepPh", 
-                    datafolder=homedir()*"/mu-cond/data/input/")
+function load_graph(
+    dataset = "ca-HepPh",
+    datafolder = homedir()*"/mu-cond/data/input/",
+)
     if dataset in ["facebook", "deezer"]
         if dataset == "facebook"
             path2file = datafolder*"musae_facebook_edges.csv"
-            n = 22470 
+            n = 22470
         elseif dataset == "deezer"
             path2file = datafolder*"deezer_europe_edges.csv"
             n = 28281
@@ -98,14 +100,14 @@ function load_graph(dataset="ca-HepPh",
 
         A, _ = largest_component(A)
     elseif dataset in ["ca-HepPh", "ca-AstroPh", "email-Enron"]
-        I = Array{Int}(undef, 0) 
+        I = Array{Int}(undef, 0)
         J = Array{Int}(undef, 0)
         linecounter = 0
         path2file = datafolder*dataset*".txt"
         open(path2file) do file
-            for l in eachline(file)  
+            for l in eachline(file)
                 linecounter += 1
-                if linecounter >= 5                 
+                if linecounter >= 5
                     u, v = split(l, '\t')
                     u = parse(Int, u)
                     v = parse(Int, v)
@@ -120,13 +122,13 @@ function load_graph(dataset="ca-HepPh",
         A, _ = largest_component(A)
     elseif dataset in ["soc-LiveJournal1"]
         path2file = datafolder*dataset*".txt"
-        I = Array{Int}(undef, 0) 
+        I = Array{Int}(undef, 0)
         J = Array{Int}(undef, 0)
         linecounter = 0
         open(path2file) do file
-            for l in eachline(file)  
+            for l in eachline(file)
                 linecounter += 1
-                if linecounter >= 5                 
+                if linecounter >= 5
                     u, v = split(l, '\t')
                     u = parse(Int, u)
                     v = parse(Int, v)
@@ -150,18 +152,23 @@ function load_graph(dataset="ca-HepPh",
     elseif dataset in ["dblp"]
         path2file = datafolder*dataset*"-cc.smat"
         A = load_graph_smat(path2file)
-        A, _= largest_component(A)
-    elseif dataset in ["email-Enron-core2", "email-Enron-core5", "email-Enron-core10", "email-Enron-core7"]
+        A, _ = largest_component(A)
+    elseif dataset in [
+        "email-Enron-core2",
+        "email-Enron-core5",
+        "email-Enron-core10",
+        "email-Enron-core7",
+    ]
         path2file = datafolder*dataset*".edges"
         A = load_graph_edge(path2file)
     else
         path2file = datafolder*dataset
         strs = split(path2file, '.')
-        @assert length(strs) > 1 "For datasets not listed, please include file extension(e.g. txt, smat)." 
+        @assert length(strs) > 1 "For datasets not listed, please include file extension(e.g. txt, smat)."
         ext = strs[end]
         if ext == "edges"
             A = load_graph_edge(path2file)
-        elseif ext == "smat"    
+        elseif ext == "smat"
             A = load_graph_smat(path2file)
         else
             @assert false "File type not supported."
@@ -178,7 +185,7 @@ function load_graph(dataset="ca-HepPh",
     return A
 end
 
-using Test 
+using Test
 
 #@testset begin 
 #    A = load_graph("ca-HepPh") 

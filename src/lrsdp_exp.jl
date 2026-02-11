@@ -10,14 +10,18 @@ filename = args["filename"]
 
 A = load_graph(filename)
 
-saved_config = TOML.parsefile(pwd()*"/configs/lrsdp_config.toml") 
+saved_config = TOML.parsefile(pwd()*"/configs/lrsdp_config.toml")
 
-Ktol, Ptol, maxfun, init_type, kvals, muvals, = 
-    args["Ktol"], args["Ptol"], args["maxfun"], args["init_type"], args["kvals"], args["muvals"] 
+Ktol, Ptol, maxfun, init_type, kvals, muvals, = args["Ktol"],
+args["Ptol"],
+args["maxfun"],
+args["init_type"],
+args["kvals"],
+args["muvals"]
 
-if length(kvals) == 0 
+if length(kvals) == 0
     @assert filename in keys(saved_config) "Please provide a list of kvals"
-    kvals = saved_config[filename]["kvals"] 
+    kvals = saved_config[filename]["kvals"]
 end
 
 if length(muvals) == 0
@@ -44,4 +48,14 @@ for k in kvals
 end
 
 mkpath(resfolder*filename*"/")
-muconductance.bulk_eval_network_profile(A, mus, ks, init_type, Ktol, Ptol, maxfun, filename, resfolder*filename*"/")
+muconductance.bulk_eval_network_profile(
+    A,
+    mus,
+    ks,
+    init_type,
+    Ktol,
+    Ptol,
+    maxfun,
+    filename,
+    resfolder*filename*"/",
+)

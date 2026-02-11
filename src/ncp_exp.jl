@@ -5,7 +5,8 @@ include("read_data.jl")
 
 args = parse_ncp_cmd()
 
-filename, epsvals, setsizes = args["filename"], args["epsvals"], args["setsizes"]
+filename, epsvals, setsizes =
+    args["filename"], args["epsvals"], args["setsizes"]
 
 if args["resfolder"] === nothing
     resfolder = pwd()*"/../data/output/"
@@ -19,7 +20,13 @@ savepath = resfolder * filename * "/" * filename * "_ncp.csv"
 A = load_graph(filename)
 
 mkpath(resfolder*filename*"/")
-ncp = DiffusionAlgorithms.bulk_local_ACL(A; alpha=0.99, epsvals=epsvals, setsizes = setsizes, filename=savepath)
+ncp = DiffusionAlgorithms.bulk_local_ACL(
+    A;
+    alpha = 0.99,
+    epsvals = epsvals,
+    setsizes = setsizes,
+    filename = savepath,
+)
 
 #Example for visualizing results
 
@@ -27,7 +34,3 @@ ncp = DiffusionAlgorithms.bulk_local_ACL(A; alpha=0.99, epsvals=epsvals, setsize
 #using Plots
 #diffusion_ncpplot(ncp)
 #savefig("$filename_ncp.pdf")
-
-
-
-
