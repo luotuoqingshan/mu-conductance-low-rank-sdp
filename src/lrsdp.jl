@@ -338,7 +338,7 @@ function print_info(
         "S_min_eigval",
         "⟨YY', S⟩",
         "‖proj grad‖_∞",
-        "‖pinfeas‖₂",
+        "‖pinfeas‖_∞",
         "σₜ",
         "ηₜ",
         "ωₜ",
@@ -441,6 +441,7 @@ function _ALM(
     ub = sqrt((1 - mu) / mu / Vol)
 
     trace_bound = sum(min.(ub^2, ((1 - 2*mu) / (1 - mu) ./ d) .+ lb^2))
+    @show trace_bound
     trace_bound = min(trace_bound, 1)
 
     lam = zeros(n + 2)
@@ -487,13 +488,11 @@ function _ALM(
         YS[:] = xout
 
         stationary = optimizer.dsave[13]
-        primal_feasi = compute_primal_feasi(YS, d, ubsqr, n, k)
-        primal_norm = norm(primal_feasi, Inf)
-
         KKT_dt = @elapsed begin
             primal_feasi, dual_feasi, comp_slack =
                 KKT_sdp(YS, L, d, ubsqr, lam, n, k)
         end
+        primal_norm = norm(primal_feasi, Inf)
         pobj = obj(YS, L, n, k)
         dobj = dual_value(n, lam, ub, lb, trace_bound, dual_feasi[1])
         print_info(
@@ -505,7 +504,7 @@ function _ALM(
             dual_feasi[1],
             comp_slack,
             stationary,
-            norm(primal_feasi, 2),
+            primal_norm,
             sigma,
             eta,
             omega,
