@@ -338,7 +338,7 @@ function print_info(
         "S_min_eigval",
         "⟨YY', S⟩",
         "‖proj grad‖_∞",
-        "‖pinfeas‖₂",
+        "‖pinfeas‖_∞",
         "σₜ",
         "ηₜ",
         "ωₜ",
@@ -442,6 +442,7 @@ function _ALM(
 
     trace_bound = sum(min.(ub^2, ((1 - 2*mu) / (1 - mu) ./ d) .+ lb^2))
     trace_bound = min(trace_bound, 1)
+    @show trace_bound
 
     lam = zeros(n + 2)
 
@@ -469,6 +470,8 @@ function _ALM(
 
     cverg = false
     niter = 0
+    max_dobj = -1e20
+    best_lam = zeros(n + 2)
     for iter = 1:maxiter
         println("Iteration $iter:")
 
@@ -487,15 +490,17 @@ function _ALM(
         YS[:] = xout
 
         stationary = optimizer.dsave[13]
-        primal_feasi = compute_primal_feasi(YS, d, ubsqr, n, k)
-        primal_norm = norm(primal_feasi, Inf)
-
         KKT_dt = @elapsed begin
             primal_feasi, dual_feasi, comp_slack =
                 KKT_sdp(YS, L, d, ubsqr, lam, n, k)
         end
+        primal_norm = norm(primal_feasi, Inf)
         pobj = obj(YS, L, n, k)
         dobj = dual_value(n, lam, ub, lb, trace_bound, dual_feasi[1])
+        if dobj > max_dobj
+            max_dobj = dobj
+            best_lam = deepcopy(lam)
+        end
         print_info(
             mu,
             k,
@@ -505,7 +510,7 @@ function _ALM(
             dual_feasi[1],
             comp_slack,
             stationary,
-            norm(primal_feasi, 2),
+            primal_norm,
             sigma,
             eta,
             omega,
@@ -530,7 +535,7 @@ function _ALM(
             break
         end
     end
-    return YS, lam, sigma, ubsqr, cverg, n, k, niter
+    return YS, best_lam, max_dobj, sigma, ubsqr, cverg, n, k, niter
 end
 
 
@@ -549,7 +554,7 @@ function ALM(
     d = sum(A, dims = 1)[1, :]
     L = Diagonal(d) - A
     ALM_dt = @elapsed begin
-        vec_YS, lam, sigma, ubsqr, cverg, n, k, niter = _ALM(
+        vec_YS, best_lam, max_dobj, sigma, ubsqr, cverg, n, k, niter = _ALM(
             A,
             mu,
             k;
@@ -563,11 +568,11 @@ function ALM(
     objval = obj(vec_YS, L, n, k)
     KKT_dt = @elapsed begin
         primal_feasi, dual_feasi, comp_slack =
-            KKT_sdp(vec_YS, L, d, ubsqr, lam, n, k)
+            KKT_sdp(vec_YS, L, d, ubsqr, best_lam, n, k)
     end
-    theta = min(0, dual_feasi[1])
     YS = reshape(@views(vec_YS), n, k + 1)
     filepath = resultfolder * filename * "-$Ktol-$Ptol-$k-$mu-$(init_type).mat"
+    dt = ALM_dt + KKT_dt
     matwrite(
         filepath,
         Dict(
@@ -577,7 +582,8 @@ function ALM(
             "Ktol" => Ktol,
             "Ptol" => Ptol,
             "YS" => YS,
-            "lam" => lam,
+            "best_lam" => best_lam,
+            "max_dobj" => max_dobj,
             "sigma" => sigma,
             "ubsqr" => ubsqr,
             "cverg" => cverg,
@@ -592,9 +598,7 @@ function ALM(
             "Gvol" => Gvol,
         );
     )
-    delta = theta * sum(YS[:, 1:k] .^ 2)
-    dt = ALM_dt + KKT_dt
-    return dt, objval, delta
+    return dt, objval, max_dobj
 end
 
 
@@ -624,9 +628,9 @@ function do_jobs(
         if mu == -1
             break
         end
-        exec_time, objval, delta =
+        exec_time, objval, max_dobj =
             ALM(mu, A, k, init_type, Ktol, Ptol, maxfun, filename, resultfolder)
-        put!(results, (mu, k, exec_time, objval, delta, myid()))
+        put!(results, (mu, k, exec_time, objval, max_dobj, myid()))
     end
 end
 
@@ -663,10 +667,10 @@ function bulk_eval_network_profile(
     end
     njob = length(mus)
     while njob > 0
-        mu, k, exec_time, objval, delta, pid = take!(results)
+        mu, k, exec_time, objval, max_dobj, pid = take!(results)
         println(
             "Computation for mu = $mu, k = $k is done on worker $pid, which takes $exec_time secs. The objval is $objval,
-            the delta is $delta, the final lower bound is $(objval + delta).",
+            the maximum dual bound is $(max_dobj).",
         )
         njob -= 1
     end
