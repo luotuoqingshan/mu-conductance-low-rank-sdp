@@ -95,23 +95,12 @@ function lrsdpobjplot(
         if isfile(path2res)
             @show mu
             res = matread(path2res)
-            YS = res["YS"]
-            k = res["k"]
-            n = res["n"]
-            Y = YS[:, 1:k]
-
-            objval = res["objval"]
-            Gvol = res["Gvol"]
-
-            @show objval
-            @assert "dual_feasi" in keys(res) "KKT conditions haven't been evaluated"
+            Gvol = Int(res["Gvol"])
 
             push!(xs, mu)
-            dual_feasi = res["dual_feasi"]
-            theta = min(0, dual_feasi[1])
-            objval += min(1.0, (1 - mu) / mu * n / Gvol) * theta
-            @show objval
-            push!(ys, objval)
+            max_dobj = res["max_dobj"]
+            @show max_dobj
+            push!(ys, max_dobj)
             cnt += 1
         end
     end
